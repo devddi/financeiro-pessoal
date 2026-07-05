@@ -1,0 +1,17 @@
+{
+  "name": "Meu Financeiro",
+  "short_name": "Financeiro",
+  "description": "Controle Financeiro Pessoal",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAFAFA",
+  "theme_color": "#0F4C3A",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "192x192 512x512 any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
