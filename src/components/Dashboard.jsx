@@ -10,7 +10,7 @@ export default function Dashboard() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [expandedTipos, setExpandedTipos] = useState(new Set(['receita', 'despesa']))
   const [expandedCats, setExpandedCats] = useState(new Set())
-  const [visibleMonths, setVisibleMonths] = useState(new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]))
+  const [visibleMonths, setVisibleMonths] = useState(new Set([new Date().getMonth()]))
   const [selectedPgtoTypes, setSelectedPgtoTypes] = useState(new Set(['PIX', 'CARTÃO']))
   const [selectedStatus, setSelectedStatus] = useState(new Set(['Pago', 'Pendente']))
   const [selectedIntervals, setSelectedIntervals] = useState(new Set(['5', '10', '15', '20', '25']))
