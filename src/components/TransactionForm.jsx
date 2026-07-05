@@ -110,7 +110,7 @@ export default function TransactionForm({ transaction, categories, onClose, onSa
         {/* Header */}
         <div className="modal-header">
           <div>
-            <p className="modal-eyebrow">{transaction ? 'Editar registro' : 'Novo registro'}</p>
+            <p className="modal-eyebrow">{transaction?.id ? 'Editar registro' : 'Novo registro'}</p>
           </div>
           <button className="modal-close" onClick={onClose}><X size={18} /></button>
         </div>
@@ -175,7 +175,7 @@ export default function TransactionForm({ transaction, categories, onClose, onSa
           </div>
 
           {/* Recurring Toggle - Only show if new transaction */}
-          {!transaction && (
+          {!transaction?.id && (
             <div className="modal-toggle-row">
               <span className="modal-toggle-label">Repetir transação (Parcelamento)</span>
               <button
@@ -229,8 +229,8 @@ export default function TransactionForm({ transaction, categories, onClose, onSa
           <div className="modal-divider" />
 
           {/* Actions */}
-          <div className="modal-actions" style={{ justifyContent: transaction ? 'space-between' : 'flex-end', alignItems: 'center' }}>
-            {transaction ? (
+          <div className="modal-actions" style={{ justifyContent: transaction?.id ? 'space-between' : 'flex-end', alignItems: 'center' }}>
+            {transaction?.id ? (
               <button 
                 type="button" 
                 className="btn" 
@@ -250,7 +250,7 @@ export default function TransactionForm({ transaction, categories, onClose, onSa
                 Cancelar
               </button>
               <button type="submit" className="btn btn-primary" disabled={loading}>
-                {loading ? 'Salvando...' : transaction ? 'Salvar alterações' : 'Adicionar transação'}
+                {loading ? 'Salvando...' : transaction?.id ? 'Salvar alterações' : 'Adicionar transação'}
               </button>
             </div>
           </div>

@@ -154,8 +154,45 @@ export default function Dashboard() {
     })
   }
 
-  const handleEditCell = (cell) => {
-    if (cell.txs.length === 0) return
+  const handleEditCell = (cell, cat, det, monthIdx) => {
+    if (cell.txs.length === 0) {
+      // It's empty, create pre-filled new transaction
+      let baseTx = null
+      const monthsData = dataMap[cat].items[det]
+      for (let i = 11; i >= 0; i--) {
+         if (monthsData[i].txs.length > 0) {
+             baseTx = monthsData[i].txs[0]
+             break
+         }
+      }
+      
+      let day = '05'
+      let pgto = 'PIX'
+      if (baseTx) {
+         const dateParts = baseTx.quando.split('-')
+         if (dateParts.length === 3) day = dateParts[2]
+         pgto = baseTx.tipo_pgto || 'PIX'
+      }
+      
+      const year = selectedYear
+      const month = monthIdx + 1
+      const daysInMonth = new Date(year, month, 0).getDate()
+      const safeDay = Math.min(Number(day), daysInMonth)
+      const dataPreenchida = `${year}-${String(month).padStart(2, '0')}-${String(safeDay).padStart(2, '0')}`
+
+      setEditingTransaction({
+         categoria: cat,
+         detalhes: det,
+         valor: '',
+         quando: dataPreenchida,
+         tipo: 'despesa',
+         pago: false,
+         tipo_pgto: pgto
+      })
+      setShowForm(true)
+      return
+    }
+
     // Se tiver mais de uma transação agrupada na mesma célula, vamos editar a primeira por padrão
     setEditingTransaction(cell.txs[0])
     setShowForm(true)
@@ -367,11 +404,11 @@ export default function Dashboard() {
                                     className="val-negative" 
                                     style={{ 
                                       fontSize: '0.8rem', 
-                                      cursor: isClickable ? 'pointer' : 'default',
+                                      cursor: 'pointer',
                                       backgroundColor: isClickable ? 'rgba(0,0,0,0.02)' : 'transparent'
                                     }}
-                                    onClick={() => isClickable && handleEditCell(cell)}
-                                    title={isClickable ? "Clique para editar" : ""}
+                                    onClick={() => handleEditCell(cell, cat, det, idx)}
+                                    title={isClickable ? "Clique para editar" : "Adicionar registro"}
                                   >
                                     <div className="flex items-center gap-2" style={{ justifyContent: 'flex-end', width: '100%' }}>
                                       <span>{formatCurrency(val)}</span>
