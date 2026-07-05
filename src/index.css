@@ -203,14 +203,22 @@ table.dre-table tr.total-row td {
   background: var(--white);
 }
 
-table.dre-table tr.row-expanded td,
-table.dre-table tr.row-expanded td.col-competencia {
+table.dre-table tr.row-expanded-receita td,
+table.dre-table tr.row-expanded-receita td.col-competencia {
   background-color: var(--primary-color) !important;
   color: var(--white) !important;
 }
 
-table.dre-table tr.row-expanded td .val-negative,
-table.dre-table tr.row-expanded td .val-positive {
+table.dre-table tr.row-expanded-despesa td,
+table.dre-table tr.row-expanded-despesa td.col-competencia {
+  background-color: var(--danger-color) !important;
+  color: var(--white) !important;
+}
+
+table.dre-table tr.row-expanded-receita td .val-negative,
+table.dre-table tr.row-expanded-receita td .val-positive,
+table.dre-table tr.row-expanded-despesa td .val-negative,
+table.dre-table tr.row-expanded-despesa td .val-positive {
   color: var(--white) !important;
 }
 

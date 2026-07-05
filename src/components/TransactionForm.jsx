@@ -29,9 +29,21 @@ export default function TransactionForm({ transaction, categories, onClose, onSa
         tipo_pgto: transaction.tipo_pgto || 'PIX'
       })
     } else if (categories.length > 0) {
-      setFormData(prev => ({ ...prev, categoria: categories[0].nome }))
+      const validCats = categories.filter(c => !c.tipo || c.tipo === 'despesa')
+      if (validCats.length > 0) {
+        setFormData(prev => ({ ...prev, categoria: validCats[0].nome, tipo: 'despesa' }))
+      }
     }
   }, [transaction, categories])
+
+  useEffect(() => {
+    const validCats = categories.filter(c => !c.tipo || c.tipo === formData.tipo)
+    if (validCats.length > 0 && !validCats.find(c => c.nome === formData.categoria)) {
+      setFormData(prev => ({ ...prev, categoria: validCats[0].nome }))
+    }
+  }, [formData.tipo, categories])
+
+  const filteredCategories = categories.filter(c => !c.tipo || c.tipo === formData.tipo)
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
@@ -139,6 +151,23 @@ export default function TransactionForm({ transaction, categories, onClose, onSa
           </div>
         ) : (
           <form onSubmit={handleSubmit}>
+          
+          {/* Toggle de Tipo */}
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', background: '#f1f5f9', padding: '0.25rem', borderRadius: '12px' }}>
+             <button type="button" 
+               style={{ flex: 1, padding: '0.5rem', borderRadius: '8px', background: formData.tipo === 'receita' ? 'var(--white)' : 'transparent', color: formData.tipo === 'receita' ? 'var(--success-color)' : 'var(--text-muted)', fontWeight: formData.tipo === 'receita' ? 700 : 500, boxShadow: formData.tipo === 'receita' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', transition: 'all 0.2s' }}
+               onClick={() => handleChange({ target: { name: 'tipo', value: 'receita', type: 'text' }})}
+             >
+                Receita
+             </button>
+             <button type="button" 
+               style={{ flex: 1, padding: '0.5rem', borderRadius: '8px', background: formData.tipo === 'despesa' ? 'var(--white)' : 'transparent', color: formData.tipo === 'despesa' ? 'var(--danger-color)' : 'var(--text-muted)', fontWeight: formData.tipo === 'despesa' ? 700 : 500, boxShadow: formData.tipo === 'despesa' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', transition: 'all 0.2s' }}
+               onClick={() => handleChange({ target: { name: 'tipo', value: 'despesa', type: 'text' }})}
+             >
+                Despesa
+             </button>
+          </div>
+
           {/* Row 1 */}
           <div className="modal-grid-2">
             <div className="field-group">
@@ -160,7 +189,7 @@ export default function TransactionForm({ transaction, categories, onClose, onSa
             <div className="field-group">
               <label>Categoria</label>
               <select name="categoria" value={formData.categoria} onChange={handleChange} required>
-                {categories.map(c => (
+                {filteredCategories.map(c => (
                   <option key={c.id} value={c.nome}>{c.nome}</option>
                 ))}
               </select>
@@ -210,7 +239,7 @@ export default function TransactionForm({ transaction, categories, onClose, onSa
 
           {/* Toggle Pago */}
           <div className="modal-toggle-row">
-            <span className="modal-toggle-label">Status do pagamento</span>
+            <span className="modal-toggle-label">{formData.tipo === 'receita' ? 'Status do recebimento' : 'Status do pagamento'}</span>
             <button
               type="button"
               role="switch"
@@ -220,8 +249,8 @@ export default function TransactionForm({ transaction, categories, onClose, onSa
             >
               <span className="toggle-thumb" />
             </button>
-            <span style={{ fontSize: '0.8rem', color: formData.pago ? 'var(--success-color)' : 'var(--text-muted)' }}>
-              {formData.pago ? 'Pago' : 'Em aberto'}
+            <span style={{ fontSize: '0.8rem', fontWeight: 500, color: formData.pago ? 'var(--success-color)' : 'var(--text-muted)' }}>
+              {formData.pago ? (formData.tipo === 'receita' ? 'Recebido' : 'Pago') : (formData.tipo === 'receita' ? 'A Receber' : 'Em aberto')}
             </span>
           </div>
 

@@ -8,6 +8,7 @@ export default function Dashboard() {
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [expandedTipos, setExpandedTipos] = useState(new Set(['receita', 'despesa']))
   const [expandedCats, setExpandedCats] = useState(new Set())
   const [visibleMonths, setVisibleMonths] = useState(new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]))
   const [selectedPgtoTypes, setSelectedPgtoTypes] = useState(new Set(['PIX', 'CARTÃO']))
@@ -40,8 +41,8 @@ export default function Dashboard() {
       const { data, error } = await supabase
         .from('financeiro_ia')
         .select('id, categoria, detalhes, valor, quando, tipo, pago, tipo_pgto')
-        .eq('tipo', 'despesa')
         .gte('quando', startDate)
+        .lte('quando', endDate)
         .lte('quando', endDate)
 
       if (error) throw error
@@ -59,62 +60,81 @@ export default function Dashboard() {
   }, [selectedYear])
 
   // Lógica de Agrupamento
-  const dataMap = {}
+  const dreMap = {
+    receita: { totals: Array(12).fill(0), items: {} },
+    despesa: { totals: Array(12).fill(0), items: {} }
+  }
   const monthlyTotals = Array(12).fill(0)
 
   transactions.forEach(t => {
     if (!t.quando) return
     const pgto = t.tipo_pgto || 'PIX'
-    if (!selectedPgtoTypes.has(pgto)) return // Filtra o tipo de pagamento
+    if (!selectedPgtoTypes.has(pgto)) return
     
     const statusTxt = t.pago ? 'Pago' : 'Pendente'
-    if (!selectedStatus.has(statusTxt)) return // Filtra o status
+    if (!selectedStatus.has(statusTxt)) return
     
     const date = new Date(t.quando)
-    // Ajuste fuso
     const monthIndex = date.getUTCMonth() 
     
+    const tipo = t.tipo || 'despesa'
     const cat = t.categoria || 'Sem Categoria'
     let detalhe = t.detalhes || 'Outros'
-    // Remove tudo que está entre parênteses para agrupar as parcelas
     detalhe = detalhe.replace(/\s*\(.*?\)/g, '').trim() || 'Outros'
     
     const val = Number(t.valor) || 0
 
-    if (!dataMap[cat]) {
-      dataMap[cat] = { totals: Array(12).fill(0), items: {} }
-    }
-    if (!dataMap[cat].items[detalhe]) {
-      dataMap[cat].items[detalhe] = Array(12).fill(null).map(() => ({ total: 0, txs: [], isPaid: true }))
+    if (!dreMap[tipo]) dreMap[tipo] = { totals: Array(12).fill(0), items: {} }
+    if (!dreMap[tipo].items[cat]) dreMap[tipo].items[cat] = { totals: Array(12).fill(0), items: {} }
+    if (!dreMap[tipo].items[cat].items[detalhe]) {
+      dreMap[tipo].items[cat].items[detalhe] = Array(12).fill(null).map(() => ({ total: 0, txs: [], isPaid: true }))
     }
 
-    dataMap[cat].totals[monthIndex] += val
+    dreMap[tipo].totals[monthIndex] += val
+    dreMap[tipo].items[cat].totals[monthIndex] += val
     
-    const cell = dataMap[cat].items[detalhe][monthIndex]
+    const cell = dreMap[tipo].items[cat].items[detalhe][monthIndex]
     cell.total += val
     cell.txs.push(t)
-    if (!t.pago) cell.isPaid = false // Se tiver uma parcela não paga, marca como pendente
+    if (!t.pago) cell.isPaid = false
     
-    monthlyTotals[monthIndex] += val
+    if (tipo === 'receita') {
+      monthlyTotals[monthIndex] += val
+    } else {
+      monthlyTotals[monthIndex] -= val
+    }
   })
 
-  // Categorias únicas ordenadas alfabeticamente
-  const sortedCategories = Object.keys(dataMap).sort()
+  const toggleTipo = (tipo) => {
+    setExpandedTipos(prev => {
+      const next = new Set(prev)
+      if (next.has(tipo)) next.delete(tipo)
+      else next.add(tipo)
+      return next
+    })
+  }
 
-  const toggleCat = (cat) => {
+  const toggleCat = (tipo, cat) => {
+    const key = `${tipo}-${cat}`
     setExpandedCats(prev => {
       const next = new Set(prev)
-      if (next.has(cat)) next.delete(cat)
-      else next.add(cat)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
       return next
     })
   }
 
   const expandAll = () => {
-    setExpandedCats(new Set(sortedCategories))
+    setExpandedTipos(new Set(['receita', 'despesa']))
+    const allCats = new Set()
+    Object.keys(dreMap).forEach(tipo => {
+      Object.keys(dreMap[tipo].items).forEach(cat => allCats.add(`${tipo}-${cat}`))
+    })
+    setExpandedCats(allCats)
   }
 
   const collapseAll = () => {
+    setExpandedTipos(new Set(['receita', 'despesa'])) // Mantém as raizes abertas
     setExpandedCats(new Set())
   }
   
@@ -154,11 +174,11 @@ export default function Dashboard() {
     })
   }
 
-  const handleEditCell = (cell, cat, det, monthIdx) => {
+  const handleEditCell = (cell, tipo, cat, det, monthIdx) => {
     if (cell.txs.length === 0) {
       // It's empty, create pre-filled new transaction
       let baseTx = null
-      const monthsData = dataMap[cat].items[det]
+      const monthsData = dreMap[tipo].items[cat].items[det]
       for (let i = 11; i >= 0; i--) {
          if (monthsData[i].txs.length > 0) {
              baseTx = monthsData[i].txs[0]
@@ -181,11 +201,11 @@ export default function Dashboard() {
       const dataPreenchida = `${year}-${String(month).padStart(2, '0')}-${String(safeDay).padStart(2, '0')}`
 
       setEditingTransaction({
+         tipo: tipo,
          categoria: cat,
          detalhes: det,
          valor: '',
          quando: dataPreenchida,
-         tipo: 'despesa',
          pago: false,
          tipo_pgto: pgto
       })
@@ -205,9 +225,13 @@ export default function Dashboard() {
   }
 
   // Função auxiliar de formatação
-  const formatCurrency = (val) => {
+  const formatCurrency = (val, tipo) => {
     if (val === 0) return '-'
-    return `-R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    const formatted = Math.abs(val).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    if (tipo === 'receita') return `R$ ${formatted}`
+    if (tipo === 'despesa') return `-R$ ${formatted}`
+    if (val < 0) return `-R$ ${formatted}` // Para o Saldo Líquido
+    return `R$ ${formatted}`
   }
 
   const formatPercent = (val) => {
@@ -220,6 +244,9 @@ export default function Dashboard() {
       </span>
     )
   }
+
+  const tiposOrder = ['receita', 'despesa']
+  const tipoLabels = { receita: 'RECEITAS', despesa: 'DESPESAS' }
 
   return (
     <div>
@@ -329,31 +356,30 @@ export default function Dashboard() {
                   ))}
                 </tr>
               </thead>
-              <tbody>
-                {sortedCategories.map(cat => {
-                  const isExpanded = expandedCats.has(cat)
-                  const items = Object.keys(dataMap[cat].items).sort()
-
+               <tbody>
+                {tiposOrder.map(tipo => {
+                  const isTipoExpanded = expandedTipos.has(tipo)
+                  const categoriasDoTipo = Object.keys(dreMap[tipo].items).sort()
+                  const headerColor = tipo === 'receita' ? 'var(--primary-color)' : 'var(--danger-color)'
+                  
                   return (
-                    <Fragment key={cat}>
-                      {/* Categoria Header Row */}
-                      <tr onClick={() => toggleCat(cat)} style={{ cursor: 'pointer' }} className={isExpanded ? 'row-expanded' : ''}>
-                        <td className="col-competencia" style={{ userSelect: 'none' }}>
+                    <Fragment key={tipo}>
+                      {/* TIPO Header Row */}
+                      <tr onClick={() => toggleTipo(tipo)} style={{ cursor: 'pointer' }} className={isTipoExpanded ? `row-expanded-${tipo}` : ''}>
+                        <td className="col-competencia" style={{ userSelect: 'none', borderBottom: '1px solid var(--border-color)' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <span style={{ display: 'flex', color: isExpanded ? 'var(--white)' : 'var(--primary-color)' }}>
-                              {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                            <span style={{ color: isTipoExpanded ? 'var(--white)' : headerColor }}>
+                              {isTipoExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                             </span>
-                            <span style={{ fontWeight: 600 }}>{cat}</span>
+                            <span style={{ fontWeight: 700, color: isTipoExpanded ? 'var(--white)' : headerColor }}>{tipoLabels[tipo]}</span>
                           </div>
                         </td>
                         {months.map((m, idx) => {
                           if (!visibleMonths.has(idx)) return null;
-                          
-                          const val = dataMap[cat].totals[idx]
-                          
+                          const val = dreMap[tipo].totals[idx]
                           let ah = 0
                           if (idx > 0) {
-                            const prevVal = dataMap[cat].totals[idx - 1]
+                            const prevVal = dreMap[tipo].totals[idx - 1]
                             if (prevVal > 0) {
                               ah = ((val / prevVal) - 1) * 100
                             } else if (val > 0) {
@@ -362,77 +388,111 @@ export default function Dashboard() {
                           }
 
                           return (
-                            <Fragment key={`cat-${cat}-${idx}`}>
-                              <td className="val-negative">{formatCurrency(val)}</td>
-                              <td style={{ borderRight: '1px solid var(--border-color)' }}>{formatPercent(ah)}</td>
+                            <Fragment key={`tipo-${tipo}-${idx}`}>
+                              <td className={tipo === 'receita' ? 'val-positive' : 'val-negative'} style={{ fontWeight: 600, borderBottom: '1px solid var(--border-color)' }}>{formatCurrency(val, tipo)}</td>
+                              <td style={{ borderRight: '1px solid var(--border-color)', borderBottom: '1px solid var(--border-color)', fontWeight: 600 }}>{formatPercent(ah)}</td>
                             </Fragment>
                           )
                         })}
                       </tr>
 
-                      {/* Sub-Items (Detalhes) Rows */}
-                      {isExpanded && items.map(det => {
-                        const hasValueInVisibleMonths = months.some((m, idx) => visibleMonths.has(idx) && dataMap[cat].items[det][idx].total !== 0)
-                        if (!hasValueInVisibleMonths) return null;
+                      {/* CATEGORIAS Rows */}
+                      {isTipoExpanded && categoriasDoTipo.map(cat => {
+                        const key = `${tipo}-${cat}`
+                        const isCatExpanded = expandedCats.has(key)
+                        const items = Object.keys(dreMap[tipo].items[cat].items).sort()
 
                         return (
-                          <tr key={`${cat}-${det}`} className="row-detail">
-                            <td className="col-competencia" style={{ paddingLeft: '2.5rem', fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 400 }}>
-                              - {det}
-                            </td>
-                            {months.map((m, idx) => {
-                              if (!visibleMonths.has(idx)) return null;
-
-                              const cell = dataMap[cat].items[det][idx]
-                              const val = cell.total
-                              
-                              let ah = 0
-                              if (idx > 0) {
-                                const prevVal = dataMap[cat].items[det][idx - 1].total
-                                if (prevVal > 0) {
-                                  ah = ((val / prevVal) - 1) * 100
-                                } else if (val > 0) {
-                                  ah = 100
+                          <Fragment key={key}>
+                            {/* Categoria Row */}
+                            <tr onClick={() => toggleCat(tipo, cat)} style={{ cursor: 'pointer' }} className={isCatExpanded ? `row-expanded-${tipo}` : ''}>
+                              <td className="col-competencia" style={{ userSelect: 'none', paddingLeft: '1.5rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                  <span style={{ display: 'flex', color: isCatExpanded ? 'var(--white)' : headerColor }}>
+                                    {isCatExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                                  </span>
+                                  <span style={{ fontWeight: 600, color: isCatExpanded ? 'var(--white)' : headerColor }}>{cat}</span>
+                                </div>
+                              </td>
+                              {months.map((m, idx) => {
+                                if (!visibleMonths.has(idx)) return null;
+                                const val = dreMap[tipo].items[cat].totals[idx]
+                                let ah = 0
+                                if (idx > 0) {
+                                  const prevVal = dreMap[tipo].items[cat].totals[idx - 1]
+                                  if (prevVal > 0) ah = ((val / prevVal) - 1) * 100
+                                  else if (val > 0) ah = 100
                                 }
-                              }
 
-                              const isClickable = cell.txs.length > 0;
+                                return (
+                                  <Fragment key={`cat-${key}-${idx}`}>
+                                    <td className={tipo === 'receita' ? 'val-positive' : 'val-negative'}>{formatCurrency(val, tipo)}</td>
+                                    <td style={{ borderRight: '1px solid var(--border-color)' }}>{formatPercent(ah)}</td>
+                                  </Fragment>
+                                )
+                              })}
+                            </tr>
+
+                            {/* Sub-Items (Detalhes) Rows */}
+                            {isCatExpanded && items.map(det => {
+                              const hasValueInVisibleMonths = months.some((m, idx) => visibleMonths.has(idx) && dreMap[tipo].items[cat].items[det][idx].total !== 0)
+                              if (!hasValueInVisibleMonths) return null;
 
                               return (
-                                <Fragment key={`det-${det}-${idx}`}>
-                                  <td 
-                                    className="val-negative" 
-                                    style={{ 
-                                      fontSize: '0.8rem', 
-                                      cursor: 'pointer',
-                                      backgroundColor: isClickable ? 'rgba(0,0,0,0.02)' : 'transparent'
-                                    }}
-                                    onClick={() => handleEditCell(cell, cat, det, idx)}
-                                    title={isClickable ? "Clique para editar" : "Adicionar registro"}
-                                  >
-                                    <div className="flex items-center gap-2" style={{ justifyContent: 'flex-end', width: '100%' }}>
-                                      <span>{formatCurrency(val)}</span>
-                                      {isClickable && (
-                                        cell.isPaid 
-                                          ? <CheckCircle size={14} style={{ color: 'var(--success-color)', flexShrink: 0 }} title="Pago" /> 
-                                          : <Clock size={14} style={{ color: '#f59e0b', flexShrink: 0 }} title="Pendente" />
-                                      )}
-                                    </div>
+                                <tr key={`${key}-${det}`} className="row-detail">
+                                  <td className="col-competencia" style={{ paddingLeft: '3.5rem', fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 400 }}>
+                                    - {det}
                                   </td>
-                                  <td style={{ borderRight: '1px solid var(--border-color)', fontSize: '0.8rem' }}>{formatPercent(ah)}</td>
-                                </Fragment>
+                                  {months.map((m, idx) => {
+                                    if (!visibleMonths.has(idx)) return null;
+                                    const cell = dreMap[tipo].items[cat].items[det][idx]
+                                    const val = cell.total
+                                    let ah = 0
+                                    if (idx > 0) {
+                                      const prevVal = dreMap[tipo].items[cat].items[det][idx - 1].total
+                                      if (prevVal > 0) ah = ((val / prevVal) - 1) * 100
+                                      else if (val > 0) ah = 100
+                                    }
+                                    const isClickable = true;
+
+                                    return (
+                                      <Fragment key={`det-${det}-${idx}`}>
+                                        <td 
+                                          className={tipo === 'receita' ? 'val-positive' : 'val-negative'} 
+                                          style={{ 
+                                            fontSize: '0.8rem', 
+                                            cursor: 'pointer',
+                                            backgroundColor: cell.txs.length > 0 ? 'rgba(0,0,0,0.02)' : 'transparent'
+                                          }}
+                                          onClick={() => handleEditCell(cell, tipo, cat, det, idx)}
+                                          title={cell.txs.length > 0 ? "Clique para editar" : "Adicionar registro"}
+                                        >
+                                          <div className="flex items-center gap-2" style={{ justifyContent: 'flex-end', width: '100%' }}>
+                                            <span>{formatCurrency(val, tipo)}</span>
+                                            {cell.txs.length > 0 && (
+                                              cell.isPaid 
+                                                ? <CheckCircle size={14} style={{ color: 'var(--success-color)', flexShrink: 0 }} title={tipo === 'receita' ? 'Recebido' : 'Pago'} /> 
+                                                : <Clock size={14} style={{ color: '#f59e0b', flexShrink: 0 }} title={tipo === 'receita' ? 'A Receber' : 'Pendente'} />
+                                            )}
+                                          </div>
+                                        </td>
+                                        <td style={{ borderRight: '1px solid var(--border-color)', fontSize: '0.8rem' }}>{formatPercent(ah)}</td>
+                                      </Fragment>
+                                    )
+                                  })}
+                                </tr>
                               )
                             })}
-                          </tr>
+                          </Fragment>
                         )
                       })}
                     </Fragment>
                   )
                 })}
 
-                {/* Total Row */}
+                {/* Total Row (Resultado do Mês / Saldo Líquido) */}
                 <tr className="total-row">
-                  <td className="col-competencia">Total Despesas (=)</td>
+                  <td className="col-competencia" style={{ fontWeight: 700 }}>Resultado do Mês (=)</td>
                   {months.map((m, idx) => {
                     if (!visibleMonths.has(idx)) return null;
 
@@ -441,16 +501,17 @@ export default function Dashboard() {
                     let ah = 0
                     if (idx > 0) {
                       const prevTotal = monthlyTotals[idx - 1]
-                      if (prevTotal > 0) {
-                        ah = ((totalMonth / prevTotal) - 1) * 100
-                      } else if (totalMonth > 0) {
-                        ah = 100
+                      // For net balance, AH can be tricky if it flips from negative to positive. We use absolute logic.
+                      if (prevTotal !== 0) {
+                        ah = ((totalMonth / Math.abs(prevTotal)) - Math.sign(prevTotal)) * 100
+                      } else if (totalMonth !== 0) {
+                        ah = totalMonth > 0 ? 100 : -100
                       }
                     }
 
                     return (
                       <Fragment key={`total-${idx}`}>
-                        <td className="val-negative" style={{ color: 'var(--primary-color)' }}>{formatCurrency(totalMonth)}</td>
+                        <td className={totalMonth >= 0 ? 'val-positive' : 'val-negative'} style={{ fontWeight: 700 }}>{formatCurrency(totalMonth)}</td>
                         <td style={{ borderRight: '1px solid var(--border-color)' }}>{formatPercent(ah)}</td>
                       </Fragment>
                     )
