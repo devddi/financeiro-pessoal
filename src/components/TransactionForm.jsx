@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { X } from 'lucide-react'
+import { X, Trash2 } from 'lucide-react'
 
 export default function TransactionForm({ transaction, categories, onClose, onSave }) {
   const [loading, setLoading] = useState(false)
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false)
   const [isRecurring, setIsRecurring] = useState(false)
   const [installments, setInstallments] = useState(2)
   const [formData, setFormData] = useState({
@@ -91,6 +92,18 @@ export default function TransactionForm({ transaction, categories, onClose, onSa
     }
   }
 
+  const handleDelete = async () => {
+    setLoading(true)
+    try {
+      const { error } = await supabase.from('financeiro_ia').delete().eq('id', transaction.id)
+      if (error) throw error
+      onSave()
+    } catch (error) {
+      alert('Erro ao excluir: ' + error.message)
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal-panel">
@@ -102,7 +115,30 @@ export default function TransactionForm({ transaction, categories, onClose, onSa
           <button className="modal-close" onClick={onClose}><X size={18} /></button>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        {showConfirmDelete ? (
+          <div style={{ padding: '2rem 1.75rem', textAlign: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem', color: 'var(--danger-color)' }}>
+              <Trash2 size={48} strokeWidth={1.5} />
+            </div>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-color)', marginBottom: '0.5rem' }}>Excluir transação?</h3>
+            <p style={{ color: 'var(--text-muted)', marginBottom: '2rem', fontSize: '0.9rem' }}>Esta ação é permanente e não pode ser desfeita.</p>
+            <div className="flex gap-4" style={{ justifyContent: 'center' }}>
+              <button type="button" className="btn" onClick={() => setShowConfirmDelete(false)} disabled={loading} style={{ flex: 1 }}>
+                Cancelar
+              </button>
+              <button 
+                type="button"
+                className="btn btn-primary" 
+                style={{ flex: 1, background: 'var(--danger-color)', borderColor: 'var(--danger-color)' }}
+                onClick={handleDelete}
+                disabled={loading}
+              >
+                {loading ? 'Excluindo...' : 'Sim, excluir'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit}>
           {/* Row 1 */}
           <div className="modal-grid-2">
             <div className="field-group">
@@ -193,15 +229,33 @@ export default function TransactionForm({ transaction, categories, onClose, onSa
           <div className="modal-divider" />
 
           {/* Actions */}
-          <div className="modal-actions">
-            <button type="button" className="btn" onClick={onClose} disabled={loading}>
-              Cancelar
-            </button>
-            <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading ? 'Salvando...' : transaction ? 'Salvar alterações' : 'Adicionar transação'}
-            </button>
+          <div className="modal-actions" style={{ justifyContent: transaction ? 'space-between' : 'flex-end', alignItems: 'center' }}>
+            {transaction ? (
+              <button 
+                type="button" 
+                className="btn" 
+                onClick={() => setShowConfirmDelete(true)} 
+                disabled={loading}
+                style={{ color: 'var(--danger-color)', borderColor: 'transparent', background: 'transparent', padding: '0.5rem' }}
+                title="Excluir"
+              >
+                <Trash2 size={18} />
+              </button>
+            ) : (
+              <div />
+            )}
+            
+            <div className="flex gap-2">
+              <button type="button" className="btn" onClick={onClose} disabled={loading}>
+                Cancelar
+              </button>
+              <button type="submit" className="btn btn-primary" disabled={loading}>
+                {loading ? 'Salvando...' : transaction ? 'Salvar alterações' : 'Adicionar transação'}
+              </button>
+            </div>
           </div>
         </form>
+        )}
       </div>
     </div>
   )
