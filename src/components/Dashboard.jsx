@@ -271,8 +271,8 @@ export default function Dashboard() {
             <table className="dre-table">
               <thead>
                 <tr>
-                  <th className="col-competencia" rowSpan={2} style={{ verticalAlign: 'bottom' }}>
-                    Competência
+                  <th className="col-competencia" style={{ verticalAlign: 'bottom', paddingBottom: '0.5rem', height: '48px', textAlign: 'center' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Competência</span>
                   </th>
                   {months.map((m, idx) => visibleMonths.has(idx) && (
                     <th key={m} colSpan={2} style={{ background: 'var(--primary-color)', color: 'var(--white)', borderRight: '1px solid rgba(255,255,255,0.2)' }}>
@@ -281,6 +281,9 @@ export default function Dashboard() {
                   ))}
                 </tr>
                 <tr className="dre-sub-header">
+                  <th className="col-competencia" style={{ verticalAlign: 'middle' }}>
+                    <span style={{ fontSize: '1rem', color: 'var(--primary-color)', fontWeight: 700 }}>Categoria / Detalhe</span>
+                  </th>
                   {months.map((m, idx) => visibleMonths.has(idx) && (
                     <Fragment key={`${m}-sub`}>
                       <th>Valor</th>
