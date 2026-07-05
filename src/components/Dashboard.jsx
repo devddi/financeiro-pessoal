@@ -1,6 +1,6 @@
 import { useState, useEffect, Fragment } from 'react'
 import { supabase } from '../lib/supabase'
-import { ChevronRight, ChevronDown, CheckCircle, Clock, Plus, ChevronsDown, ChevronsUp } from 'lucide-react'
+import { ChevronRight, ChevronDown, CheckCircle, Clock, Plus, ChevronsDown, ChevronsUp, LogOut } from 'lucide-react'
 import TransactionForm from './TransactionForm'
 
 export default function Dashboard() {
@@ -13,6 +13,7 @@ export default function Dashboard() {
   const [visibleMonths, setVisibleMonths] = useState(new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]))
   const [selectedPgtoTypes, setSelectedPgtoTypes] = useState(new Set(['PIX', 'CARTÃO']))
   const [selectedStatus, setSelectedStatus] = useState(new Set(['Pago', 'Pendente']))
+  const [selectedIntervals, setSelectedIntervals] = useState(new Set(['5', '10', '15', '20', '25']))
 
   const [showForm, setShowForm] = useState(false)
   const [editingTransaction, setEditingTransaction] = useState(null)
@@ -22,6 +23,7 @@ export default function Dashboard() {
   const years = [2025, 2026, 2027] // Anos disponíveis no filtro
   const pgtoOptions = ['PIX', 'CARTÃO']
   const statusOptions = ['Pago', 'Pendente']
+  const intervalOptions = ['5', '10', '15', '20', '25']
 
   const fetchData = async () => {
     setLoading(true)
@@ -76,6 +78,16 @@ export default function Dashboard() {
     
     const date = new Date(t.quando)
     const monthIndex = date.getUTCMonth() 
+    const day = date.getUTCDate()
+    
+    let interval = ''
+    if (day <= 5) interval = '5'
+    else if (day <= 10) interval = '10'
+    else if (day <= 15) interval = '15'
+    else if (day <= 20) interval = '20'
+    else interval = '25'
+
+    if (!selectedIntervals.has(interval)) return
     
     const tipo = t.tipo || 'despesa'
     const cat = t.categoria || 'Sem Categoria'
@@ -174,6 +186,18 @@ export default function Dashboard() {
     })
   }
 
+  const toggleInterval = (int) => {
+    setSelectedIntervals(prev => {
+      const next = new Set(prev)
+      if (next.has(int)) {
+        if (next.size > 1) next.delete(int)
+      } else {
+        next.add(int)
+      }
+      return next
+    })
+  }
+
   const handleEditCell = (cell, tipo, cat, det, monthIdx) => {
     if (cell.txs.length === 0) {
       // It's empty, create pre-filled new transaction
@@ -250,31 +274,50 @@ export default function Dashboard() {
 
   return (
     <div>
-      {/* Filters */}
-      <div className="filter-bar">
-        <div className="year-tabs">
-          {years.map(year => (
-            <button 
-              key={year}
-              className={selectedYear === year ? 'active' : ''}
-              onClick={() => setSelectedYear(year)}
-            >
-              {year}
-            </button>
-          ))}
+      {/* Header com Filtros de Data */}
+      <header className="top-header">
+        <div>
+          <h1>Meu Financeiro</h1>
+          <div className="subtitle">Análise Financeira</div>
         </div>
         
-        <div className="month-tabs">
-          {months.map((m, idx) => (
-            <button 
-              key={m} 
-              className={visibleMonths.has(idx) ? 'active' : ''}
-              onClick={() => toggleMonth(idx)}
-            >
-              {m}
-            </button>
-          ))}
+        <div className="flex items-center gap-4">
+          <div className="year-tabs" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+            {years.map(year => (
+              <button 
+                key={year}
+                className={selectedYear === year ? 'active' : ''}
+                onClick={() => setSelectedYear(year)}
+              >
+                {year}
+              </button>
+            ))}
+          </div>
+          
+          <div className="month-tabs" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+            {months.map((m, idx) => (
+              <button 
+                key={m} 
+                className={visibleMonths.has(idx) ? 'active' : ''}
+                onClick={() => toggleMonth(idx)}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+
+          <button 
+            className="btn" 
+            onClick={() => supabase.auth.signOut()}
+            title="Sair"
+          >
+            <LogOut size={16} />
+          </button>
         </div>
+      </header>
+
+      {/* Filters (Status e Pagamento) */}
+      <div className="filter-bar">
 
         <div className="month-tabs">
           {pgtoOptions.map(tipo => (
@@ -298,6 +341,22 @@ export default function Dashboard() {
               {st}
             </button>
           ))}
+        </div>
+
+        <div className="month-tabs" title="Filtrar por dia do mês (vencimento/recebimento)">
+          {intervalOptions.map(int => {
+            const label = int === '5' ? '1 a 5' : int === '10' ? '6 a 10' : int === '15' ? '11 a 15' : int === '20' ? '16 a 20' : '21+'
+            return (
+              <button 
+                key={int}
+                className={selectedIntervals.has(int) ? 'active' : ''}
+                onClick={() => toggleInterval(int)}
+                title={`Dias ${label}`}
+              >
+                {int}
+              </button>
+            )
+          })}
         </div>
 
         <div style={{ flex: 1 }}></div>

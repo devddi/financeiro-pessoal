@@ -5,6 +5,8 @@ import { X, Trash2 } from 'lucide-react'
 export default function TransactionForm({ transaction, categories, onClose, onSave }) {
   const [loading, setLoading] = useState(false)
   const [showConfirmDelete, setShowConfirmDelete] = useState(false)
+  const [showRecurringPrompt, setShowRecurringPrompt] = useState(false)
+  const [recurringInfo, setRecurringInfo] = useState(null)
   const [isRecurring, setIsRecurring] = useState(false)
   const [installments, setInstallments] = useState(2)
   const [formData, setFormData] = useState({
@@ -36,31 +38,101 @@ export default function TransactionForm({ transaction, categories, onClose, onSa
     }
   }, [transaction, categories])
 
-  useEffect(() => {
-    const validCats = categories.filter(c => !c.tipo || c.tipo === formData.tipo)
-    if (validCats.length > 0 && !validCats.find(c => c.nome === formData.categoria)) {
-      setFormData(prev => ({ ...prev, categoria: validCats[0].nome }))
-    }
-  }, [formData.tipo, categories])
-
   const filteredCategories = categories.filter(c => !c.tipo || c.tipo === formData.tipo)
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }))
+    setFormData(prev => {
+      const next = {
+        ...prev,
+        [name]: type === 'checkbox' ? checked : value
+      }
+      
+      // Se mudou o tipo (Receita/Despesa), verifica se a categoria atual continua válida
+      if (name === 'tipo') {
+        const validCats = categories.filter(c => !c.tipo || c.tipo === next.tipo)
+        if (validCats.length > 0 && !validCats.find(c => c.nome === next.categoria)) {
+          next.categoria = validCats[0].nome
+        }
+      }
+      
+      return next
+    })
   }
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault()
+    
+    if (transaction?.id) {
+       const match = transaction.detalhes.match(/(.+?)\s*\((\d+)\/(\d+)\)$/)
+       if (match) {
+           const baseName = match[1].trim()
+           const currentInst = parseInt(match[2])
+           const totalInst = parseInt(match[3])
+           
+           if (currentInst < totalInst) {
+               const oldVal = parseFloat(transaction.valor) || 0
+               const newVal = parseFloat(formData.valor) || 0
+               const oldDay = transaction.quando.split('-')[2]
+               const newDay = formData.quando.split('-')[2]
+               
+               const changed = (oldVal !== newVal) || (oldDay !== newDay) || (transaction.categoria !== formData.categoria) || (transaction.tipo_pgto !== formData.tipo_pgto)
+               
+               if (changed) {
+                   setRecurringInfo({ baseName, currentInst, totalInst })
+                   setShowRecurringPrompt(true)
+                   return // Intercept
+               }
+           }
+       }
+    }
+    
+    executeSave(false)
+  }
+
+  const executeSave = async (updateFuture) => {
     setLoading(true)
     try {
       const dataToSave = { ...formData, valor: parseFloat(formData.valor) }
       if (transaction?.id) {
         const { error } = await supabase.from('financeiro_ia').update(dataToSave).eq('id', transaction.id)
         if (error) throw error
+        
+        if (updateFuture && recurringInfo) {
+            // Search future installments by description
+            const searchPattern = `%${recurringInfo.baseName} (%/${recurringInfo.totalInst})%`
+            const { data: futureTxs, error: searchError } = await supabase
+               .from('financeiro_ia')
+               .select('id, detalhes, quando')
+               .ilike('detalhes', searchPattern)
+            
+            if (!searchError && futureTxs) {
+                const newDay = parseInt(formData.quando.split('-')[2])
+                
+                const updates = futureTxs.filter(tx => {
+                    if (tx.id === transaction.id) return false;
+                    const m = tx.detalhes.match(/\((\d+)\/\d+\)$/)
+                    if (m) {
+                        return parseInt(m[1]) > recurringInfo.currentInst
+                    }
+                    return false;
+                }).map(tx => {
+                    const [fYear, fMonth] = tx.quando.split('-')
+                    const daysInMonth = new Date(parseInt(fYear), parseInt(fMonth), 0).getDate()
+                    const clampedDay = Math.min(newDay, daysInMonth)
+                    const newDateStr = `${fYear}-${fMonth}-${String(clampedDay).padStart(2, '0')}`
+                    
+                    return supabase.from('financeiro_ia').update({
+                        valor: dataToSave.valor,
+                        categoria: dataToSave.categoria,
+                        tipo_pgto: dataToSave.tipo_pgto,
+                        quando: newDateStr
+                    }).eq('id', tx.id)
+                })
+                
+                await Promise.all(updates)
+            }
+        }
       } else {
         if (isRecurring && installments > 1) {
           const inserts = []
@@ -96,6 +168,7 @@ export default function TransactionForm({ transaction, categories, onClose, onSa
           if (error) throw error
         }
       }
+      setShowRecurringPrompt(false)
       onSave()
     } catch (error) {
       alert('Erro ao salvar: ' + error.message)
@@ -146,6 +219,42 @@ export default function TransactionForm({ transaction, categories, onClose, onSa
                 disabled={loading}
               >
                 {loading ? 'Excluindo...' : 'Sim, excluir'}
+              </button>
+            </div>
+          </div>
+        ) : showRecurringPrompt ? (
+          <div style={{ padding: '2rem 1.75rem', textAlign: 'center' }}>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-color)', marginBottom: '0.5rem' }}>Alterar parcelas futuras?</h3>
+            <p style={{ color: 'var(--text-muted)', marginBottom: '2rem', fontSize: '0.9rem' }}>
+              Você editou uma parcela. Deseja aplicar as alterações de (valor, data, categoria e pagamento) para todas as {recurringInfo?.totalInst - recurringInfo?.currentInst} parcelas seguintes desta recorrência?
+            </p>
+            <div className="flex gap-4" style={{ justifyContent: 'center', flexDirection: 'column' }}>
+              <button 
+                type="button"
+                className="btn btn-primary" 
+                style={{ width: '100%', padding: '0.75rem' }}
+                onClick={() => executeSave(true)}
+                disabled={loading}
+              >
+                {loading ? 'Salvando...' : 'Sim, alterar esta e as seguintes'}
+              </button>
+              <button 
+                type="button" 
+                className="btn" 
+                onClick={() => executeSave(false)} 
+                disabled={loading} 
+                style={{ width: '100%', padding: '0.75rem' }}
+              >
+                {loading ? 'Salvando...' : 'Não, alterar somente esta'}
+              </button>
+              <button 
+                type="button" 
+                className="btn" 
+                onClick={() => setShowRecurringPrompt(false)} 
+                disabled={loading} 
+                style={{ width: '100%', padding: '0.75rem', borderColor: 'transparent', background: 'transparent', color: 'var(--text-muted)' }}
+              >
+                Cancelar
               </button>
             </div>
           </div>

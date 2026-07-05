@@ -33,23 +33,6 @@ function App() {
 
   return (
     <div>
-      <header className="top-header">
-        <div>
-          <h1>Meu Financeiro</h1>
-          <div className="subtitle">Análise Financeira</div>
-        </div>
-        
-        <div className="flex items-center gap-4">
-          <button 
-            className="btn" 
-            onClick={() => supabase.auth.signOut()}
-            title="Sair"
-          >
-            <LogOut size={16} />
-          </button>
-        </div>
-      </header>
-      
       <Dashboard session={session} />
     </div>
   )
