@@ -20,7 +20,7 @@ export default function Dashboard() {
 
   // Configuração dos meses
   const months = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
-  const years = [2025, 2026, 2027] // Anos disponíveis no filtro
+  const years = [new Date().getFullYear(), new Date().getFullYear() + 1] // Anos disponíveis no filtro
   const pgtoOptions = ['PIX', 'CARTÃO']
   const statusOptions = ['Pago', 'Pendente']
   const intervalOptions = ['5', '10', '15', '20', '25']
